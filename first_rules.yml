@@ -1,0 +1,148 @@
+groups:
+- name: port
+  rules:
+  - alert: 应用端口监控 # 告警名称
+    expr: probe_success == 0 # 告警的判定条件，参考Prometheus高级查询来设定
+    for: 1s # 满足告警条件持续时间多久后，才会发送告警
+    labels: #标签项
+      status: 严重
+    annotations: # 解析项，详细解释告警信息
+      summary: "group:{{$labels.instance}} High Node port has been down "
+      description: "group:{{$labels.instance}} 服务已停止使用 "
+- name: memory
+  rules:
+  - alert: 内存使用率
+    expr: (100 - (((node_memory_MemFree_bytes+node_memory_Buffers_bytes+node_memory_Cached_bytes)/node_memory_MemTotal_bytes) * 100))  > 80
+    for: 2m
+    labels:
+      status: 严重
+    annotations:
+      summary: "{{$labels.instance}}: High Node Memory usage detected"
+      description: "{{$labels.instance}}: Node Memory usage is above 80% ,(current value is: {{ $value }})"
+- name: cpu
+  rules:
+  - alert: cpu使用率
+    expr: (100 - (avg by (instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100))  > 80
+    for: 2m
+    labels:
+      status: 严重
+    annotations:
+      summary: "{{$labels.instance}}: Node High CPU usage detected"
+      description: "{{$labels.instance}}: Node CPU usage is above 80% ,(current value is: {{ $value }})"
+- name: load
+  rules: 
+  - alert:  系统负载
+    expr: node_load5 > 4
+    for: 1m
+    labels:
+      severity: Critical
+    annotations:
+      summary: "{{ $labels.appname }} "
+      description: "主机5分钟负载超过4"
+      value: "{{ $value }}"
+- name: network-flow
+  rules: 
+  - alert: 网络带宽流入
+    expr: sum by (instance) (irate(node_network_receive_bytes_total[2m])) / 1024 / 1024 > 100
+    for: 1m
+    labels:
+      name: network
+      severity: Critical
+    annotations:
+      summary: "{{$labels.mountpoint}} 流入网络带宽过高"
+      description: "{{$labels.mountpoint }}流入网络异常,高于100M"
+      value: "{{ $value }}"
+- name: network-out
+  rules:
+  - alert: 网络带宽流出
+    expr: sum by (instance) (irate(node_network_transmit_bytes_total[2m])) / 1024 / 1024 > 100
+    for: 1m
+    labels:
+      name: network
+      severity: Critical
+    annotations:
+      summary: "{{$labels.mountpoint}} 发送网络带宽过高"
+      description: "{{$labels.mountpoint }}发送网络异常,高于100M"
+      value: "{{ $value }}"
+ 
+- name: tcp
+  rules:
+  - alert: tcp连接数
+    expr: node_netstat_Tcp_CurrEstab > 5000
+    for: 1m
+    labels:
+      name: tcp
+      severity: Critical
+    annotations:
+      summary: "{{$labels.mountpoint}} TCP_ESTABLISHED过高！"
+      description: "{{$labels.mountpoint }} TCP_ESTABLISHED大于5000"
+      value: "{{ $value }}"
+ 
+- name: disk-读
+  rules:
+  - alert: "磁盘读 I/O 超过 30MB/s"
+    expr: irate(node_disk_read_bytes_total{device="sda"}[1m]) > 30000000
+    for: 30s
+    annotations:
+      sumary: "服务器实例 {{ $labels.instance }} I/O 读负载 告警通知"
+      description: "{{ $labels.instance }}I/O 每分钟读已超过 30MB/s,当前值: {{ $value }}"
+- name: disk-写
+  rules:
+  - alert: "磁盘写 I/O 超过 30MB/s"
+    expr: irate(node_disk_written_bytes_total{device="sda"}[1m]) > 30000000
+    for: 30s
+    annotations:
+      sumary: "服务器实例 {{ $labels.instance }} I/O 写负载 告警通知"
+      description: "{{ $labels.instance }}I/O 每分钟写已超过 30MB/s,当前值: {{ $value }}"
+- name: cpu负载
+  rules:
+  - alert: "CPU 平均负载大于 4 个"
+    expr: node_load5 > 4
+    for: 30s
+    annotations:
+      sumary: "服务器实例 {{ $labels.instance }} CPU 负载 告警通知"
+      description: "{{ $labels.instance }}CPU 平均负载(5 分钟) 已超过 4 ,当前值: {{ $value }}"
+- name: memory 余
+  rules:
+  - alert: "内存容量小于 20%"
+    expr: ((node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Buffers_bytes - node_memory_Cached_bytes) / (node_memory_MemTotal_bytes )) * 100 > 80
+    for: 30s
+    labels:
+      severity: warning
+    annotations:
+      summary: "服务器实例 {{ $labels.instance }} 内存不足 告警通知"
+      description: "{{ $labels.instance }}内存资源已不足 20%,当前值: {{ $value }}"
+- name: disk write rate
+  rules:
+  - alert: 磁盘写入速度
+    expr: sum by (instance) (irate(node_disk_written_bytes_total[2m])) / 1024 / 1024 > 50
+    for: 1m
+    labels:
+      name: disk
+      severity: Critical
+    annotations:
+      summary: "disk write rate (instance {{ $labels.instance }})"
+      description: "磁盘写入速率大于50MB/s"
+      value: "{{ $value }}%"
+- name: disk write latency
+  rules:
+  - alert: 磁盘写入延迟
+    expr: rate(node_disk_write_time_seconds_total[1m]) / rate(node_disk_writes_completed_total[1m]) > 100
+    for: 1m
+    labels:
+      name: disk
+      severity: Critical
+    annotations:
+      summary: "unusual disk write latency (instance {{ $labels.instance }})"
+      description: "磁盘写入延迟大于100毫秒"
+      value: "{{ $value }}%"
+- name: disk
+  rules:
+  - alert: 磁盘使用率
+    expr: (1-  (node_filesystem_free_bytes{fstype=~"ext3|ext4|xfs"} * node_filesystem_size_bytes{fstype=~"ext3|ext4|xfs"}) ) * 100 > 80
+    for: 2m
+    labels:
+      status: 严重
+    annotations:
+      summary: "{{$labels.instance}}: High Node Filesystem usage detected"
+      description: "{{$labels.instance}}: Node Filesystem usage is above 80% ,(current value is: {{ $value }})"
